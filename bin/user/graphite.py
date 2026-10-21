@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# Modified 2026-10-22 by weewx-packages: compatibility and tracker repairs.
 
 """
 Sends WeeWX weather records to Graphite using the Carbon/TCP protocol.
@@ -36,12 +37,13 @@ Reference WeeWX Record format:
 """
 
 
+__version__ = '2.2.0'
 __author__ = 'Greg Albrecht W2GMD <oss@undef.net>'
 __license__ = 'Apache License, Version 2.0'
 __copyright__ = 'Copyright 2016 Orion Labs, Inc.'
 
 
-import Queue
+import queue
 import socket
 import sys
 import syslog
@@ -74,7 +76,7 @@ class Graphite(weewx.restx.StdRESTful):
             'wx_binding'
         )
 
-        self.archive_queue = Queue.Queue()
+        self.archive_queue = queue.Queue()
         self.archive_thread = GraphiteThread(
             self.archive_queue,
             _manager_dict,
@@ -110,7 +112,7 @@ class GraphiteThread(weewx.restx.RESTThread):
     def __init__(self, queue, manager_dict,
                  host=DEFAULT_HOST, port=DEFAULT_PORT, prefix=DEFAULT_PREFIX,
                  skip_upload=False, post_interval=DEFAULT_POST_INTERVAL,
-                 max_backlog=sys.maxint, stale=None, log_success=True,
+                 max_backlog=sys.maxsize, stale=None, log_success=True,
                  log_failure=True, timeout=DEFAULT_TIMEOUT,
                  max_tries=DEFAULT_MAX_TRIES, retry_wait=DEFAULT_RETRY_WAIT):
 
@@ -121,7 +123,7 @@ class GraphiteThread(weewx.restx.RESTThread):
         :param prefix: Graphite Queue Prefix.
         :param log_success: Log a successful post in the system log.
         :param log_failure: Log an unsuccessful post in the system log.
-        :param max_backlog: Max length of Queue before trimming. dft=sys.maxint
+        :param max_backlog: Max length of Queue before trimming. dft=sys.maxsize
         :param max_tries: How many times to try the post before giving up.
         :param stale: How old a record can be and still considered useful.
         :param post_interval: The interval in seconds between posts.
@@ -154,14 +156,10 @@ class GraphiteThread(weewx.restx.RESTThread):
             metric_name = name
 
         if value is None:
-            _value = 0.0
-        else:
-            _value = value
-
-        sock = socket.socket()
-        sock.connect((self.host, int(self.port)))
-        sock.send("%s %f %d\n" % (metric_name, _value, timestamp))
-        sock.close()
+            return
+        payload = ('%s %f %d\n' % (metric_name, value, timestamp)).encode('utf-8')
+        with socket.create_connection((self.host, int(self.port)), self.timeout) as sock:
+            sock.sendall(payload)
 
     def process_record(self, record, dbmanager):
         _ = dbmanager
@@ -172,5 +170,5 @@ class GraphiteThread(weewx.restx.RESTThread):
                 "restx: Graphite: skip_upload=True, skipping upload"
             )
         else:
-            for rkey, rval in record.iteritems():
+            for rkey, rval in record.items():
                 self.collect_metric(rkey, rval, record['dateTime'])

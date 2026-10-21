@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# Modified 2026-10-22 by weewx-packages: compatibility and tracker repairs.
 
 """
 Setup for WeeWX Graphite Extension.
@@ -9,13 +10,13 @@ Source:: https://github.com/ampledata/weewx_graphite
 
 
 __title__ = 'graphite'
-__version__ = '2.1.0'
+__version__ = '2.2.0'
 __author__ = 'Greg Albrecht W2GMD <oss@undef.net>'
 __license__ = 'Apache License, Version 2.0'
 __copyright__ = 'Copyright 2016 Orion Labs, Inc.'
 
 
-import setup
+from weecfg.extension import ExtensionInstaller
 
 
 def loader():
@@ -23,7 +24,7 @@ def loader():
     return WeewxGraphiteInstaller()
 
 
-class WeewxGraphiteInstaller(setup.ExtensionInstaller):
+class WeewxGraphiteInstaller(ExtensionInstaller):
     """Installs WeeWX Graphite Extension."""
 
     def __init__(self):

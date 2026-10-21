@@ -1,0 +1,31 @@
+{
+  "environments": [
+    {
+      "environment": "py314-weewx552",
+      "exit_code": 0,
+      "seconds": 2.18,
+      "summary": "5 passed, 1 skipped in 2.03s"
+    },
+    {
+      "environment": "py310-weewx510",
+      "exit_code": 0,
+      "seconds": 2.19,
+      "summary": "5 passed, 1 skipped in 2.07s"
+    },
+    {
+      "environment": "py310-weewx410",
+      "exit_code": 0,
+      "seconds": 2.19,
+      "summary": "6 passed in 2.06s"
+    }
+  ],
+  "mutations": [
+    {
+      "mutation": "carbon-payload",
+      "test": "tests/test_graphite.py::test_carbon_wire_has_original_epoch_and_skips_missing",
+      "detected": true,
+      "exit_code": 1,
+      "observed_failure": "E           AssertionError: assert 'weewx.outTemp 0.000000 1700000000' in []\nFAILED tests/test_graphite.py::test_carbon_wire_has_original_epoch_and_skips_missing"
+    }
+  ]
+}
