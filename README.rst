@@ -15,12 +15,13 @@ Installation
 You need a reachable Carbon plaintext TCP listener, usually on port 2003,
 and WeeWX. The runtime has no additional Python dependencies.
 
-Install the fixed release with stock WeeWX 5::
+Use ``weectl`` from the Python environment running WeeWX. Replace
+``/path/to/weewx.conf`` with your existing station configuration, then
+install the fixed release with stock WeeWX 5::
 
     weectl extension install https://github.com/weewx-packages/weewx-graphite/releases/download/v2.2.0/weewx-graphite-2.2.0.tar.gz --config /path/to/weewx.conf
 
-Use the WeeWX Python environment and replace the configuration path. You
-can also download that URL and install its local archive. Use elevated
+You can also download that URL and install its local archive. Use elevated
 permissions only when your station files require them.
 
 The installer registers ``user.graphite.Graphite``. Set the Carbon listener
