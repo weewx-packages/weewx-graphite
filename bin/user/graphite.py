@@ -193,6 +193,7 @@ class GraphiteThread(weewx.restx.RESTThread):
             # after some metrics were sent. The retry sends the whole record
             # again. Whisper keeps the last value written for a metric and
             # timestamp, so the repeated metrics overwrite the earlier ones.
+            _error = None
             for _count in range(self.max_tries):
                 try:
                     if _count:
@@ -202,5 +203,6 @@ class GraphiteThread(weewx.restx.RESTThread):
                     return
                 except OSError as e:
                     self.handle_exception(e, _count + 1)
+                    _error = e
             raise weewx.restx.FailedPost(
-                "Failed upload after %d tries" % self.max_tries)
+                "Failed upload after %d tries: %s" % (self.max_tries, _error))
