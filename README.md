@@ -53,9 +53,9 @@ Graphite server.
 | `log_failure` | `True` | Log failed uploads. |
 | `skip_upload` | `False` | Process records without sending them. |
 
-Without `host` or `port`, the uploader logs an error and does not start.
-WeeWX keeps running. Options not in this table are logged as unknown and
-ignored.
+Without `host` or `port`, or with a placeholder still in place, the uploader
+logs an error and does not start. WeeWX keeps running. Options not in this
+table are logged as unknown and ignored.
 
 Every field of the archive record becomes one metric named
 `<prefix>.<field>`, including `dateTime`, `usUnits` and `interval`. Fields

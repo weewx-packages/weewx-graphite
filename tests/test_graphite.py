@@ -1,8 +1,11 @@
 import importlib.util
+import logging
 import pathlib
 import queue
 import socket
 import threading
+
+import pytest
 
 import graphite
 
@@ -64,7 +67,6 @@ def test_service_initializes_with_current_config_api(monkeypatch,tmp_path):
 
 def start_service(monkeypatch, tmp_path, options):
     import configobj
-    logged = []
 
     class Engine:
         def bind(self, *args):
@@ -72,20 +74,20 @@ def start_service(monkeypatch, tmp_path, options):
 
     config = configobj.ConfigObj({'StdRESTful': {'Graphite': options}, 'DataBindings': {'wx_binding': {'database': 'archive_sqlite'}}, 'Databases': {'archive_sqlite': {'driver': 'weedb.sqlite', 'root': str(tmp_path), 'database_name': 'archive.sdb'}}})
     monkeypatch.setattr(graphite.GraphiteThread, 'start', lambda self: None)
-    monkeypatch.setattr(graphite.syslog, 'syslog', lambda level, message: logged.append((level, message)))
-    return graphite.Graphite(Engine(), config), logged
+    return graphite.Graphite(Engine(), config)
 
 
-def test_missing_port_is_logged_and_skips_uploader(monkeypatch, tmp_path):
-    service, logged = start_service(monkeypatch, tmp_path, {'host': 'localhost'})
+@pytest.mark.parametrize('options', [{'host': 'localhost'}, {'host': 'localhost', 'port': 'CARBON_PORT'}])
+def test_missing_port_is_logged_and_skips_uploader(monkeypatch, tmp_path, caplog, options):
+    service = start_service(monkeypatch, tmp_path, options)
     assert not hasattr(service, 'archive_thread')
-    assert (graphite.syslog.LOG_ERR, 'restx: Graphite: Data will not be posted: Missing option port') in logged
+    assert ('graphite', logging.ERROR, 'Data will not be posted: Missing option port') in caplog.record_tuples
 
 
-def test_unknown_options_are_logged_and_ignored(monkeypatch, tmp_path):
-    service, logged = start_service(monkeypatch, tmp_path, {'host': 'localhost', 'port': '2003', 'enable': 'true', 'post_intervall': '60'})
+def test_unknown_options_are_logged_and_ignored(monkeypatch, tmp_path, caplog):
+    service = start_service(monkeypatch, tmp_path, {'host': 'localhost', 'port': '2003', 'enable': 'true', 'post_intervall': '60'})
     assert service.archive_thread.host == 'localhost'
-    assert (graphite.syslog.LOG_WARNING, "restx: Graphite: Unknown option 'post_intervall' ignored") in logged
+    assert ('graphite', logging.WARNING, "Unknown option 'post_intervall' ignored") in caplog.record_tuples
 
 
 def test_unreachable_receiver_is_retried_and_thread_keeps_running(monkeypatch):

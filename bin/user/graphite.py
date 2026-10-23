@@ -3,6 +3,8 @@
 # Modified 2026-10-22 by weewx-packages: compatibility and tracker repairs.
 # Modified 2026-10-23 by weewx-packages: retry network errors, report missing
 # and unknown options instead of stopping WeeWX.
+# Modified 2026-10-23 by weewx-packages: treat the installer placeholders as
+# missing options, log through the logging module instead of syslog.
 
 """
 Sends WeeWX weather records to Graphite using the Carbon/TCP protocol.
@@ -46,15 +48,21 @@ __copyright__ = 'Copyright 2016 Orion Labs, Inc.'
 
 
 import inspect
+import logging
 import queue
 import socket
 import sys
-import syslog
 import time
 
 import weewx
 import weewx.restx
 import weeutil.weeutil
+
+log = logging.getLogger(__name__)
+
+# install.py writes these values for host and port. Until the user replaces
+# them, they count as missing, as 'replace_me' does for the WeeWX uploaders.
+PLACEHOLDERS = ('CARBON_HOST', 'CARBON_PORT')
 
 
 class Graphite(weewx.restx.StdRESTful):
@@ -70,11 +78,8 @@ class Graphite(weewx.restx.StdRESTful):
         if _graphite_dict is None:
             return
         for option in ('host', 'port'):
-            if not _graphite_dict.get(option):
-                syslog.syslog(
-                    syslog.LOG_ERR, "restx: Graphite: "
-                    "Data will not be posted: Missing option %s" % option
-                )
+            if not _graphite_dict.get(option) or _graphite_dict[option] in PLACEHOLDERS:
+                log.error("Data will not be posted: Missing option %s", option)
                 return
 
         # GraphiteThread takes the options as keyword arguments. An option it
@@ -83,10 +88,7 @@ class Graphite(weewx.restx.StdRESTful):
         _known = set(inspect.signature(GraphiteThread.__init__).parameters)
         _known -= {'self', 'queue', 'manager_dict'}
         for option in sorted(set(_graphite_dict) - _known):
-            syslog.syslog(
-                syslog.LOG_WARNING, "restx: Graphite: "
-                "Unknown option '%s' ignored" % option
-            )
+            log.warning("Unknown option '%s' ignored", option)
             del _graphite_dict[option]
 
         _manager_dict = weewx.manager.get_manager_dict(
@@ -104,11 +106,8 @@ class Graphite(weewx.restx.StdRESTful):
         self.archive_thread.start()
         self.bind(weewx.NEW_ARCHIVE_RECORD, self.new_archive_record)
 
-        syslog.syslog(
-            syslog.LOG_INFO,
-            "restx: Graphite: Data will be sent to host %s:%s" %
-            (_graphite_dict['host'], _graphite_dict['port'])
-        )
+        log.info("Data will be sent to host %s:%s",
+                 _graphite_dict['host'], _graphite_dict['port'])
 
     def new_archive_record(self, event):
         self.archive_queue.put(event.record)
@@ -184,10 +183,7 @@ class GraphiteThread(weewx.restx.RESTThread):
         _ = dbmanager
 
         if self.skip_upload:
-            syslog.syslog(
-                syslog.LOG_DEBUG,
-                "restx: Graphite: skip_upload=True, skipping upload"
-            )
+            log.debug("skip_upload=True, skipping upload")
         else:
             # Each metric goes over its own connection, so an attempt can fail
             # after some metrics were sent. The retry sends the whole record
