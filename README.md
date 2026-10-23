@@ -39,16 +39,23 @@ Graphite server.
 
 | Option | Default | Meaning |
 |---|---|---|
+| `enable` | `True` | `false` turns the uploader off. |
 | `host` | required | Carbon host. |
 | `port` | required | Carbon plaintext TCP port, usually `2003`. |
 | `prefix` | `weewx` | Metric path prefix. An empty value sends the bare field names. |
 | `post_interval` | `300` | Minimum seconds between two uploaded records. |
 | `timeout` | `60` | Socket timeout in seconds. |
+| `max_tries` | `3` | Attempts per record. After the last failed attempt the record is logged and dropped. |
+| `retry_wait` | `5` | Seconds between attempts. |
 | `stale` | none | Records older than this many seconds are skipped. |
 | `max_backlog` | unlimited | Queue length before old records are dropped. |
 | `log_success` | `True` | Log each uploaded record. |
 | `log_failure` | `True` | Log failed uploads. |
 | `skip_upload` | `False` | Process records without sending them. |
+
+Without `host` or `port`, the uploader logs an error and does not start.
+WeeWX keeps running. Options not in this table are logged as unknown and
+ignored.
 
 Every field of the archive record becomes one metric named
 `<prefix>.<field>`, including `dateTime`, `usUnits` and `interval`. Fields
@@ -63,12 +70,6 @@ have their own deletion tools.
 
 ## Limitations
 
-- A missing `host` or `port` stops WeeWX at startup with a `KeyError`.
-  Options other than those in the table, such as `enable`, stop it with a
-  `TypeError`.
-- `max_tries` and `retry_wait` are accepted but have no effect. If the
-  Carbon receiver cannot be reached, the upload thread logs the error and
-  ends. Uploads resume after a WeeWX restart.
 - Graphite retention decides how much history is kept. If recent points
   appear but older ones do not, query Graphite directly for the same epoch
   range. Then check the retention in Carbon's `storage-schemas.conf` and

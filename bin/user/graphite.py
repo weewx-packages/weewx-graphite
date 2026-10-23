@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Modified 2026-10-22 by weewx-packages: compatibility and tracker repairs.
+# Modified 2026-10-23 by weewx-packages: retry network errors, report missing
+# and unknown options instead of stopping WeeWX.
 
 """
 Sends WeeWX weather records to Graphite using the Carbon/TCP protocol.
@@ -43,10 +45,12 @@ __license__ = 'Apache License, Version 2.0'
 __copyright__ = 'Copyright 2016 Orion Labs, Inc.'
 
 
+import inspect
 import queue
 import socket
 import sys
 import syslog
+import time
 
 import weewx
 import weewx.restx
@@ -60,15 +64,30 @@ class Graphite(weewx.restx.StdRESTful):
 
     def __init__(self, engine, config_dict):
         super(Graphite, self).__init__(engine, config_dict)
-        try:
-            _graphite_dict = weeutil.weeutil.accumulateLeaves(
-                config_dict['StdRESTful']['Graphite'], max_level=1)
-        except KeyError as exc:
-            syslog.syslog(
-                syslog.LOG_DEBUG, "restx: Graphite: "
-                "Data will not be posted: Missing option %s" % exc
-            )
+        # get_site_dict() returns None, and logs why, when the section is
+        # missing or has enable = false.
+        _graphite_dict = weewx.restx.get_site_dict(config_dict, 'Graphite')
+        if _graphite_dict is None:
             return
+        for option in ('host', 'port'):
+            if not _graphite_dict.get(option):
+                syslog.syslog(
+                    syslog.LOG_ERR, "restx: Graphite: "
+                    "Data will not be posted: Missing option %s" % option
+                )
+                return
+
+        # GraphiteThread takes the options as keyword arguments. An option it
+        # does not know would raise TypeError and stop WeeWX, so log it and
+        # leave it out.
+        _known = set(inspect.signature(GraphiteThread.__init__).parameters)
+        _known -= {'self', 'queue', 'manager_dict'}
+        for option in sorted(set(_graphite_dict) - _known):
+            syslog.syslog(
+                syslog.LOG_WARNING, "restx: Graphite: "
+                "Unknown option '%s' ignored" % option
+            )
+            del _graphite_dict[option]
 
         _manager_dict = weewx.manager.get_manager_dict(
             config_dict['DataBindings'],
@@ -170,5 +189,18 @@ class GraphiteThread(weewx.restx.RESTThread):
                 "restx: Graphite: skip_upload=True, skipping upload"
             )
         else:
-            for rkey, rval in record.items():
-                self.collect_metric(rkey, rval, record['dateTime'])
+            # Each metric goes over its own connection, so an attempt can fail
+            # after some metrics were sent. The retry sends the whole record
+            # again. Whisper keeps the last value written for a metric and
+            # timestamp, so the repeated metrics overwrite the earlier ones.
+            for _count in range(self.max_tries):
+                try:
+                    if _count:
+                        time.sleep(self.retry_wait)
+                    for rkey, rval in record.items():
+                        self.collect_metric(rkey, rval, record['dateTime'])
+                    return
+                except OSError as e:
+                    self.handle_exception(e, _count + 1)
+            raise weewx.restx.FailedPost(
+                "Failed upload after %d tries" % self.max_tries)
