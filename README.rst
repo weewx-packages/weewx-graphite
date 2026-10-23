@@ -1,38 +1,48 @@
-weewx\_graphite - WeeWX Extension for sending weather data to Graphite.
-=======================================================================
+WeeWX observations for Graphite
+==============================
 
-Note
-----
+Send numeric archive observations to Graphite Carbon over plaintext TCP.
+Metrics retain the original archive timestamp and the archive's units.
 
-There are two versions of this Extension:
-
-1. weewx_graphite version 1.x for WeeWX 2.7.x: https://github.com/ampledata/weewx_graphite/tree/compat27
-2. weewx_graphite version 2.x for WeeWX 3.x: https://github.com/ampledata/weewx_graphite/
-
-This continuation is tested with WeeWX 4.10.2 and 5.x on Python 3.
+This is the weewx-packages continuation, release **2.2.0**. See `ORIGIN.md
+<ORIGIN.md>`_ and `REPAIR_NOTES.md <REPAIR_NOTES.md>`_. The catalog archive
+targets WeeWX >=5.5.2,<5.7 and Python >=3.10,<3.15. Earlier upstream branches
+for WeeWX 2.7 and 3 remain historical references, not this release's target.
 
 Installation
 ------------
 
-1. Download tarball from Github:
-    ``wget https://github.com/weewx-packages/weewx-graphite/archive/master.tar.gz``
-2. Install with WeeWX's Extension Manager:
-    ``weectl extension install master.tar.gz`` (WeeWX 5), or
-    ``wee_extension --install master.tar.gz`` (WeeWX 4).
-3. Update **weewx.conf** to point to your Graphite **host** and **port**::
+You need a reachable Carbon plaintext TCP listener, usually on port 2003,
+and WeeWX. The runtime has no additional Python dependencies.
 
-      [StdRESTful]
+Install the fixed release with stock WeeWX 5::
+
+    weectl extension install https://github.com/weewx-packages/weewx-graphite/releases/download/v2.2.0/weewx-graphite-2.2.0.tar.gz --config /path/to/weewx.conf
+
+Use the WeeWX Python environment and replace the configuration path. You
+can also download that URL and install its local archive. Use elevated
+permissions only when your station files require them.
+
+The installer registers ``user.graphite.Graphite``. Set the Carbon listener
+in ``weewx.conf``::
+
+    [StdRESTful]
         [[Graphite]]
             host = graphite.example.com
             port = 2003
+            prefix = weewx.garden
 
-4. Restart WeeWX.
+Restart WeeWX yourself. After an archive record, look for metrics below
+``weewx.garden`` on your Graphite server. ``post_interval`` defaults to 300
+seconds. The service resolves ``wx_binding`` at startup.
 
 
 Usage
 -----
-Number-like metrics collected by WeeWX will show up in Graphite under the
-**weewx.*** node (unless reconfigured with the ``prefix`` config paramater).
+Numeric archive fields appear under ``weewx.*`` unless ``prefix`` changes
+the path. Missing values are skipped; zero is sent. The uploader includes
+metadata fields such as ``usUnits``. It has no unit conversion, TLS or
+authentication settings. The receiver must accept Carbon plaintext TCP.
 
 
 Example
