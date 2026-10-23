@@ -4,6 +4,7 @@
 # Author:: Greg Albrecht W2GMD <oss@undef.net>
 # Copyright:: Copyright 2016 Orion Labs, Inc.
 # License:: Apache License, Version 2.0
+# Modified 2026-10-23 by weewx-packages: install with weectl.
 #
 
 
@@ -14,7 +15,7 @@ TARGETS=install.py bin/user/graphite.py
 all: install
 
 install:
-	./setup.py --extension --install weewx_graphite.tar.gz
+	weectl extension install .
 
 
 install_requirements:

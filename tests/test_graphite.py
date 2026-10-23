@@ -60,3 +60,49 @@ def test_service_initializes_with_current_config_api(monkeypatch,tmp_path):
     service=graphite.Graphite(Engine(),config)
     assert service.archive_thread.host=='localhost'
     assert events[0][0]==weewx.NEW_ARCHIVE_RECORD
+
+
+def start_service(monkeypatch, tmp_path, options):
+    import configobj
+    logged = []
+
+    class Engine:
+        def bind(self, *args):
+            pass
+
+    config = configobj.ConfigObj({'StdRESTful': {'Graphite': options}, 'DataBindings': {'wx_binding': {'database': 'archive_sqlite'}}, 'Databases': {'archive_sqlite': {'driver': 'weedb.sqlite', 'root': str(tmp_path), 'database_name': 'archive.sdb'}}})
+    monkeypatch.setattr(graphite.GraphiteThread, 'start', lambda self: None)
+    monkeypatch.setattr(graphite.syslog, 'syslog', lambda level, message: logged.append((level, message)))
+    return graphite.Graphite(Engine(), config), logged
+
+
+def test_missing_port_is_logged_and_skips_uploader(monkeypatch, tmp_path):
+    service, logged = start_service(monkeypatch, tmp_path, {'host': 'localhost'})
+    assert not hasattr(service, 'archive_thread')
+    assert (graphite.syslog.LOG_ERR, 'restx: Graphite: Data will not be posted: Missing option port') in logged
+
+
+def test_unknown_options_are_logged_and_ignored(monkeypatch, tmp_path):
+    service, logged = start_service(monkeypatch, tmp_path, {'host': 'localhost', 'port': '2003', 'enable': 'true', 'post_intervall': '60'})
+    assert service.archive_thread.host == 'localhost'
+    assert (graphite.syslog.LOG_WARNING, "restx: Graphite: Unknown option 'post_intervall' ignored") in logged
+
+
+def test_unreachable_receiver_is_retried_and_thread_keeps_running(monkeypatch):
+    attempts = []
+    sleeps = []
+
+    def refuse(address, timeout):
+        attempts.append(address)
+        raise ConnectionRefusedError(111, 'Connection refused')
+
+    monkeypatch.setattr(graphite.socket, 'create_connection', refuse)
+    monkeypatch.setattr(graphite.time, 'sleep', sleeps.append)
+    records = queue.Queue()
+    worker = graphite.GraphiteThread(records, None, host='127.0.0.1', port='2003', post_interval=0, max_tries=2, retry_wait=7)
+    records.put({'dateTime': 1700000000, 'outTemp': 0})
+    records.put(None)
+    # run_loop() returns at the None record unless an exception ends the thread.
+    worker.run_loop()
+    assert len(attempts) == 2
+    assert sleeps == [7]
